@@ -37,6 +37,9 @@ def read_json_file(filename):
         print(f"Error: File '{filename}' contains invalid JSON.")
         return None
 
+def safe_trim(value, max_length):
+    """ตัดค่าสตริงให้ไม่เกิน max_length"""
+    return str(value).strip()[:max_length] if value else ''
 
 # Extract address components from JSON structure
 def extract_address(address_data):
@@ -125,7 +128,7 @@ def insert_sba_data(json_data, connection):
 
         # Card info
         card_id_type = data.get('cardIdType', {}).get('key', '') if isinstance(data.get('cardIdType'), dict) else ''
-        card_number = data.get('cardNumber', '')
+        card_number = safe_trim(data.get('cardNumber', ''), 20)
         card_issue = format_date(
             data.get('cardIssueDate', {}).get('formatted', '') if data.get('cardIssueDate') else '')
         card_expiry = format_date(
@@ -136,11 +139,11 @@ def insert_sba_data(json_data, connection):
         birthday = format_date(data.get('birthDate', {}).get('formatted', '') if data.get('birthDate') else '')
 
         # Contact info
-        email = data.get('email', '')
+        email = data.get('email', '').strip()[:100]
         mobile = data.get('mobileNumber', '')
-        tel_no1 = data.get('telephoneNumber', '')
-        tel_no2 = data.get('officeTelephoneNumber', '')
-        fax_no1 = data.get('faxNumber', '')
+        tel_no1 = data.get('telephoneNumber', '').strip()[:20]
+        tel_no2 = data.get('officeTelephoneNumber', '').strip()[:20]
+        fax_no1 = data.get('faxNumber', '').strip()[:20]
 
         # Construct address strings
         first_addr1 = f"{residence['no']} {residence['moo']} {residence['road']}".strip()
@@ -154,7 +157,7 @@ def insert_sba_data(json_data, connection):
         bank_branch_code = redemption_accounts.get('bankBranchCode', '')
         bank_acc_type = redemption_accounts.get('bankAccountType', {}).get('key', '') if isinstance(
             redemption_accounts.get('bankAccountType'), dict) else ''
-        bank_acc_no = redemption_accounts.get('bankAccountNo', '')
+        bank_acc_no = safe_trim(redemption_accounts.get('bankAccountNo', ''), 20)
 
         # Extract account types and features
         account_types = json_data.get('types', [])
@@ -166,7 +169,7 @@ def insert_sba_data(json_data, connection):
         payment_type = data.get('paymentType', {}).get('key', '') if isinstance(data.get('paymentType'), dict) else ''
 
         # Marketing and referral info
-        mkt_id = data.get('referralId', '')
+        mkt_id = safe_trim(data.get('referralId', ''), 20)
 
         # Account feature flags
         has_cash = 'Y' if 'EQUITY' in account_types else 'N'
@@ -220,7 +223,10 @@ def insert_sba_data(json_data, connection):
             mkt_id,
             has_cash, has_credit, has_tfex, has_bond, has_fund, has_offshore
         )
-
+        #debug ค่า insert
+        print("[DEBUG SBA] Insert values:")
+        for i, v in enumerate(values):
+            print(f"  [{i}] {v} ({type(v).__name__}) len={len(str(v)) if v else 0}")
         # Execute query with parameters
         cursor.execute(insert_query, values)
         connection.commit()
@@ -253,10 +259,10 @@ def insert_stt_data(json_data, connection):
         # Extract personal info
         title_t = data.get('title', {}).get('key', '') if isinstance(data.get('title'), dict) else ''
         title_e = data.get('titleEn', {}).get('key', '') if isinstance(data.get('titleEn'), dict) else ''
-        th_first_name = data.get('thFirstName', '')
-        th_last_name = data.get('thLastName', '')
-        en_first_name = data.get('enFirstName', '')
-        en_last_name = data.get('enLastName', '')
+        th_first_name = safe_trim(data.get('thFirstName', ''), 50)
+        th_last_name = safe_trim(data.get('thLastName', ''), 50)
+        en_first_name = safe_trim(data.get('enFirstName', ''), 50)
+        en_last_name = safe_trim(data.get('enLastName', ''), 50)
 
         # Extract contact information
         mobile = data.get('mobileNumber', '')
@@ -267,8 +273,14 @@ def insert_stt_data(json_data, connection):
         card_no = data.get('cardNumber', '')
         card_issue_date = format_date(
             data.get('cardIssueDate', {}).get('formatted', '') if data.get('cardIssueDate') else '')
+        # เพิ่ม fallback ถ้าไม่มีวันที่
+        if not card_issue_date or card_issue_date.lower() == 'null':
+            card_issue_date = '1900-01-01'  # fallback ที่ปลอดภัย
+        # card_expiry_date
         card_expiry_date = format_date(
             data.get('cardExpiryDate', {}).get('formatted', '') if data.get('cardExpiryDate') else '')
+        if not card_expiry_date or card_expiry_date.lower() == 'null':
+            card_expiry_date = '2099-12-31'
 
         # Extract timestamps
         created_time = json_data.get('createdTime', '')
